@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  temporal-mysql:
+    image: mysql:8
+    environment:
+      - MYSQL_ROOT_PASSWORD=temporal
+      - MYSQL_DATABASE=temporal
+      - MYSQL_USER=temporal
+      - MYSQL_PASSWORD=temporal
+    ports:
+      - "3307:3306"         # Host 3307 -> Container 3306
+    networks:
+      - temporal-net
+    volumes:
+      - ./init-temporal-visibility.sql:/docker-entrypoint-initdb.d/init-temporal-visibility.sql
+
+  temporal:
+    image: temporalio/auto-setup:latest
+    ports:
+      - "7233:7233"
+    environment:
+      - DB=mysql8
+      - MYSQL_SEEDS=temporal-mysql
+      - MYSQL_USER=temporal
+      - MYSQL_PWD=temporal
+      - MYSQL_DB=temporal
+      - MYSQL_PORT=3306   # Must be 3306 for container-to-container
+    depends_on:
+      - temporal-mysql
+    networks:
+      - temporal-net
+
+
+  worker:
+    build: .
+    command: npm run worker
+    depends_on:
+      - temporal
+    env_file:
+      - .env
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+    networks:
+      - temporal-net
+
+  api:
+    build: .
+    command: npm run start
+    ports:
+      - "4000:4000"
+    depends_on:
+      - temporal
+    env_file:
+      - .env
+    networks:
+      - temporal-net
+
+
+networks:
+  temporal-net:
